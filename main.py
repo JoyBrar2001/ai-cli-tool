@@ -11,13 +11,15 @@ def thinking_animation(stop_event):
     i = 0
 
     while not stop_event.is_set():
-        elapsed = int(time.time() - start_time)
-        sys.stdout.write(f"\r🤖 Thinking {spinner[i % len(spinner)]} {elapsed}s")
+        elapsed = time.time() - start_time
+        sys.stdout.write(
+            f"\r🤖 Thinking {spinner[i % len(spinner)]} {elapsed:.1f}s"
+        )
         sys.stdout.flush()
-        time.sleep(0.2)
+        time.sleep(0.1)
         i += 1
 
-    sys.stdout.write("\r" + " " * 50 + "\r")  # clear line
+    sys.stdout.write("\r" + " " * 60 + "\r")
     
 def print_logo():
     logo = r"""
@@ -59,6 +61,14 @@ RULES:
 - Do NOT include markdown
 - Always return valid JSON
 
+STRICT TOOL RULES:
+
+- create_file ONLY accepts: path
+- write_file ONLY accepts: path, content
+- read_file ONLY accepts: path
+
+DO NOT include extra fields.
+
 Examples:
 
 Create file:
@@ -88,7 +98,7 @@ def call_gemini(user_input):
     thread.start()
 
     response = client.models.generate_content(
-        model="gemma-3-1b-it",
+        model="gemini-2.5-flash",
         contents=SYSTEM_PROMPT + "\nUser: " + user_input
     )
 
@@ -118,6 +128,8 @@ def main():
     print("Type 'exit' to quit.\n")
     print("=" * 60)
 
+    MAX_STEPS = 10
+
     while True:
         user_input = input("\n> ")
 
@@ -126,19 +138,24 @@ def main():
             break
 
         conversation = user_input
+        completed = False
 
-        for step in range(5):
-            print(f"\n🧠 Step {step + 1}")
+        for step in range(1, MAX_STEPS + 1):
+            print(f"\n🧠 Step {step}/{MAX_STEPS}")
             print("-" * 40)
 
             response = call_gemini(conversation)
-
+            print(response)
             parsed = try_parse_json(response)
 
             if parsed and "action" in parsed:
                 action = parsed["action"]
-
                 print(f"🔧 Action: {action}")
+                
+                if action == "finish":
+                    print("\n✅ Task completed successfully!")
+                    completed = True
+                    break
 
                 if action in TOOLS:
                     try:
@@ -156,9 +173,16 @@ def main():
             else:
                 print("\n💬 Response:")
                 print(response)
+                completed = True
                 break
 
-        print("\n" + "=" * 60)
+        # 🚨 If max steps reached and not completed
+        if not completed:
+            print("\n⚠️ Request too long.")
+            print("👉 Please break it down into smaller steps.\n")
+
+        print("=" * 60)
+        
 
 if __name__ == "__main__":
     main()
