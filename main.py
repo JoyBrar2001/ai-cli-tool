@@ -1,8 +1,37 @@
 from google import genai
 import json
 from tools import create_file, write_file, read_file
+import threading
+import time
+import sys
 
-client = genai.Client(api_key="AIzaSyC9DmNDog9cjHvgYuQdA5H5w1pW-DryZeM")
+def thinking_animation(stop_event):
+    start_time = time.time()
+    spinner = ["|", "/", "-", "\\"]
+    i = 0
+
+    while not stop_event.is_set():
+        elapsed = int(time.time() - start_time)
+        sys.stdout.write(f"\r🤖 Thinking {spinner[i % len(spinner)]} {elapsed}s")
+        sys.stdout.flush()
+        time.sleep(0.2)
+        i += 1
+
+    sys.stdout.write("\r" + " " * 50 + "\r")  # clear line
+    
+def print_logo():
+    logo = r"""
+   ____                         
+  / ___| ___ _ __ ___  (_)_ __ (_)\ \/ /
+ | |  _ / _ \ '_ ` _ \ | | '_ \| | \  /
+ | |_| |  __/ | | | | || | | | | | /  \
+  \____|\___|_| |_| |_||_|_| |_|_|/ /\ \
+
+            ⚡ GeminiX CLI Agent ⚡
+    """
+    print(logo)
+
+client = genai.Client(api_key="AIzaSyBWgvq4ljA2WO7Iil-UvyMC0gAcdhLtneU")
 
 TOOLS = {
     "create_file": create_file,
@@ -53,46 +82,69 @@ Read file:
 """
 
 def call_gemini(user_input):
+    stop_event = threading.Event()
+    thread = threading.Thread(target=thinking_animation, args=(stop_event,))
+    
+    thread.start()
+
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemma-3-1b-it",
         contents=SYSTEM_PROMPT + "\nUser: " + user_input
     )
+
+    stop_event.set()
+    thread.join()
+
     return response.text
 
 
 def try_parse_json(text):
     try:
+        text = text.strip()
+
+        # Remove ```json or ``` wrappers
+        if text.startswith("```"):
+            text = text.split("```")[1]  # remove first ```
+            text = text.replace("json", "", 1).strip()
+            text = text.replace("```", "").strip()
+
         return json.loads(text)
-    except:
+    except Exception as e:
         return None
 
 
 def main():
-    print("🤖 Geminix CLI started. Type 'exit' to quit.\n")
+    print_logo()
+    print("Type 'exit' to quit.\n")
+    print("=" * 60)
 
     while True:
-        user_input = input("> ")
+        user_input = input("\n> ")
 
         if user_input.lower() == "exit":
+            print("\n👋 Exiting GeminiX...\n")
             break
 
         conversation = user_input
 
-        for step in range(5):  # limit steps to avoid infinite loops
+        for step in range(5):
+            print(f"\n🧠 Step {step + 1}")
+            print("-" * 40)
+
             response = call_gemini(conversation)
-            print(response)
+
             parsed = try_parse_json(response)
-            print(parsed)
 
             if parsed and "action" in parsed:
                 action = parsed["action"]
+
+                print(f"🔧 Action: {action}")
 
                 if action in TOOLS:
                     try:
                         result = TOOLS[action](**{k: v for k, v in parsed.items() if k != "action"})
                         print(f"⚙️ {result}")
 
-                        # Feed result back to model
                         conversation += f"\nTool result: {result}\nWhat should be done next?"
 
                     except Exception as e:
@@ -102,8 +154,11 @@ def main():
                     print("❌ Unknown tool")
                     break
             else:
+                print("\n💬 Response:")
                 print(response)
                 break
+
+        print("\n" + "=" * 60)
 
 if __name__ == "__main__":
     main()
