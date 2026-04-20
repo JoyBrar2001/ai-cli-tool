@@ -1,0 +1,57 @@
+# -----------------------------
+# Python cache files
+# -----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore pycache in ALL subfolders
+**/__pycache__/
+
+# -----------------------------
+# Virtual environments
+# -----------------------------
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Ignore ANY env folder anywhere
+**/env/
+**/venv/
+**/.venv/
+
+# -----------------------------
+# Build / distribution
+# -----------------------------
+dist/
+build/
+*.spec
+
+# Ignore dist anywhere (extra safe)
+**/dist/
+**/build/
+
+# -----------------------------
+# Environment variables
+# -----------------------------
+.env
+.env.*
+*.env
+
+# -----------------------------
+# OS / Editor junk
+# -----------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# -----------------------------
+# Logs
+# -----------------------------
+*.log
+todo.md
+workspace
