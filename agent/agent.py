@@ -1,19 +1,21 @@
 from agent.model import GeminiModel
 from agent.parser import parse_json
-from tools.file_tools import create_file, write_file, read_file, list_files
+from tools.file_tools import create_file, write_file, read_file, list_files, edit_file
 
 TOOLS = {
     "create_file": create_file,
     "write_file": write_file,
     "read_file": read_file,
-    "list_files": list_files
+    "list_files": list_files,
+    "edit_file": edit_file
 }
 
 TOOL_SCHEMAS = {
     "create_file": ["path"],
     "write_file": ["path", "content"],
     "read_file": ["path"],
-    "list_files": []
+    "list_files": [],
+    "edit_file": ["path", "old", "new"]
 }
 
 SYSTEM_PROMPT = """ 
@@ -25,6 +27,14 @@ You have access to these tools:
 2. write_file - input: { "path": "file name", "content": "text" } 
 3. read_file - input: { "path": "file name" } 
 4. list_files - input: {} 
+5. edit_file
+   - input: { "path": "file name", "old": "text to replace", "new": "replacement text" }
+
+EDITING RULES:
+- Prefer edit_file instead of write_file when modifying existing files
+- Use read_file first to understand content before editing
+- Only modify necessary parts of the file
+- Do NOT overwrite entire file unless explicitly required
 
 IMPORTANT: 
 
@@ -78,6 +88,9 @@ class Agent:
                 if action == "finish":
                     print("\n✅ Task completed successfully! 🎉")
                     return
+                
+                if action == "edit_file":
+                    print("✏️ Editing file...")
 
                 if action == last_action:
                     print("⚠️ Repeating action. Stopping.")

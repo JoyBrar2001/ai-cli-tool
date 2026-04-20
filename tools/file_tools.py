@@ -1,4 +1,5 @@
 import os
+from tools.diff import generate_diff, print_diff
 
 BASE_DIR = "workspace"
 
@@ -41,6 +42,13 @@ def write_file(path: str, content: str):
     if not os.path.exists(full_path):
         return "Error: File does not exist. Create it first."
 
+    with open(full_path, "r", encoding="utf-8") as f:
+        old_content = f.read()
+
+    diff = generate_diff(old_content, content)
+
+    print_diff(diff)   # 👈 SHOW DIFF
+
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(content)
 
@@ -55,3 +63,25 @@ def read_file(path: str):
 
     with open(full_path, "r", encoding="utf-8") as f:
         return f.read()
+    
+def edit_file(path: str, old: str, new: str):
+    full_path = get_full_path(path)
+
+    if not os.path.exists(full_path):
+        return "Error: File does not exist."
+
+    with open(full_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if old not in content:
+        return "Error: target text not found."
+
+    updated_content = content.replace(old, new, 1)
+
+    diff = generate_diff(content, updated_content)
+    print_diff(diff)
+
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write(updated_content)
+
+    return f"Edited file at {full_path}"
