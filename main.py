@@ -1,10 +1,11 @@
 from google import genai
 import json
-from tools import create_file, write_file, read_file
+from tools import create_file, write_file, read_file, list_files
 import threading
 import time
 import sys
 
+# ---------------- UX ---------------- #
 def thinking_animation(stop_event):
     start_time = time.time()
     spinner = ["|", "/", "-", "\\"]
@@ -20,7 +21,8 @@ def thinking_animation(stop_event):
         i += 1
 
     sys.stdout.write("\r" + " " * 60 + "\r")
-    
+
+
 def print_logo():
     logo = r"""
    ____                         
@@ -33,64 +35,58 @@ def print_logo():
     """
     print(logo)
 
-client = genai.Client(api_key="AIzaSyBWgvq4ljA2WO7Iil-UvyMC0gAcdhLtneU")
+# ---------------- MODEL ---------------- #
+client = genai.Client(api_key="AIzaSyBWgvq4ljA2WO7Iil-UvyMC0gAcdhLtneU")  # ⚠️ replace with env var
 
+# ---------------- TOOLS ---------------- #
 TOOLS = {
     "create_file": create_file,
     "write_file": write_file,
-    "read_file": read_file
+    "read_file": read_file,
+    "list_files": list_files
 }
 
+TOOL_SCHEMAS = {
+    "create_file": ["path"],
+    "write_file": ["path", "content"],
+    "read_file": ["path"],
+    "list_files": []
+}
+
+# ---------------- PROMPT ---------------- #
 SYSTEM_PROMPT = """
 You are an AI coding agent.
 
-You have access to these tools:
+TOOLS:
 
-1. create_file
-   - input: { "path": "file name" }
+1. create_file → { "path": "file name" }
+2. write_file → { "path": "file name", "content": "text" }
+3. read_file → { "path": "file name" }
+4. list_files → {}
 
-2. write_file
-   - input: { "path": "file name", "content": "text" }
+TASK COMPLETION RULES:
+- If task is fully complete → return:
+  { "action": "finish" }
 
-3. read_file
-   - input: { "path": "file name" }
+- DO NOT repeat the same action if it already succeeded
+- DO NOT recreate existing files
+- After writing correct content → FINISH immediately
+- Prefer minimal steps
 
-RULES:
-- If a tool is needed → return ONLY JSON
-- Do NOT include explanation
-- Do NOT include markdown
-- Always return valid JSON
+IMPORTANT:
+- Before creating/writing → call list_files
+- Avoid duplicates
 
 STRICT TOOL RULES:
+- create_file → only path
+- write_file → path + content
+- read_file → only path
+- list_files → no params
 
-- create_file ONLY accepts: path
-- write_file ONLY accepts: path, content
-- read_file ONLY accepts: path
-
-DO NOT include extra fields.
-
-Examples:
-
-Create file:
-{
-  "action": "create_file",
-  "path": "test.py"
-}
-
-Write file:
-{
-  "action": "write_file",
-  "path": "test.py",
-  "content": "print('hello')"
-}
-
-Read file:
-{
-  "action": "read_file",
-  "path": "test.py"
-}
+Return ONLY JSON when using tools.
 """
 
+# ---------------- GEMINI CALL ---------------- #
 def call_gemini(user_input):
     stop_event = threading.Event()
     thread = threading.Thread(target=thinking_animation, args=(stop_event,))
@@ -98,7 +94,7 @@ def call_gemini(user_input):
     thread.start()
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="models/gemini-2.5-flash",
         contents=SYSTEM_PROMPT + "\nUser: " + user_input
     )
 
@@ -107,22 +103,31 @@ def call_gemini(user_input):
 
     return response.text
 
-
+# ---------------- JSON PARSER ---------------- #
 def try_parse_json(text):
     try:
         text = text.strip()
 
-        # Remove ```json or ``` wrappers
-        if text.startswith("```"):
-            text = text.split("```")[1]  # remove first ```
-            text = text.replace("json", "", 1).strip()
-            text = text.replace("```", "").strip()
+        # Extract JSON inside markdown
+        if "```" in text:
+            parts = text.split("```")
+            for part in parts:
+                part = part.strip()
+                if part.startswith("{") and part.endswith("}"):
+                    return json.loads(part)
 
-        return json.loads(text)
-    except Exception as e:
+        # Extract first {...} block if extra text exists
+        start = text.find("{")
+        end = text.rfind("}")
+
+        if start != -1 and end != -1:
+            return json.loads(text[start:end+1])
+
+        return None
+    except Exception:
         return None
 
-
+# ---------------- MAIN LOOP ---------------- #
 def main():
     print_logo()
     print("Type 'exit' to quit.\n")
@@ -139,6 +144,7 @@ def main():
 
         conversation = user_input
         completed = False
+        last_action = None
 
         for step in range(1, MAX_STEPS + 1):
             print(f"\n🧠 Step {step}/{MAX_STEPS}")
@@ -146,29 +152,57 @@ def main():
 
             response = call_gemini(conversation)
             print(response)
+
             parsed = try_parse_json(response)
 
             if parsed and "action" in parsed:
                 action = parsed["action"]
                 print(f"🔧 Action: {action}")
-                
+
+                # ✅ FINISH HANDLER
                 if action == "finish":
-                    print("\n✅ Task completed successfully!")
+                    print("\n✅ Task completed successfully! 🎉")
                     completed = True
                     break
 
+                # ✅ LOOP GUARD
+                if action == last_action:
+                    print("⚠️ Repeating same action. Stopping to avoid loop.")
+                    completed = True
+                    break
+
+                last_action = action
+
+                # ✅ TOOL EXECUTION
                 if action in TOOLS:
                     try:
-                        result = TOOLS[action](**{k: v for k, v in parsed.items() if k != "action"})
+                        allowed_args = TOOL_SCHEMAS[action]
+                        filtered_args = {
+                            k: v for k, v in parsed.items() if k in allowed_args
+                        }
+
+                        result = TOOLS[action](**filtered_args)
                         print(f"⚙️ {result}")
 
-                        conversation += f"\nTool result: {result}\nWhat should be done next?"
+                        # ✅ Better feedback loop
+                        conversation += f"""
+User goal: {user_input}
+
+Last action: {action}
+Result: {result}
+
+What should be done next?
+If task is complete, return:
+{{ "action": "finish" }}
+"""
 
                     except Exception as e:
                         print(f"❌ Tool error: {str(e)}")
+                        completed = True
                         break
                 else:
                     print("❌ Unknown tool")
+                    completed = True
                     break
             else:
                 print("\n💬 Response:")
@@ -176,13 +210,12 @@ def main():
                 completed = True
                 break
 
-        # 🚨 If max steps reached and not completed
         if not completed:
             print("\n⚠️ Request too long.")
             print("👉 Please break it down into smaller steps.\n")
 
         print("=" * 60)
-        
+
 
 if __name__ == "__main__":
     main()
