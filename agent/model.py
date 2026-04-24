@@ -1,12 +1,14 @@
-from google import genai
-from config import API_KEY
+# from google import genai
+# from config import API_KEY
+import requests
 import threading
 import time
 import sys
 
-class GeminiModel:
-    def __init__(self):
-        self.client = genai.Client(api_key=API_KEY)
+class LocalModel:
+    def __init__(self, model="gemma4"):
+        self.model = model
+        self.url = "http://localhost:11434/api/generate"
 
     def _thinking_animation(self, stop_event):
         start_time = time.time()
@@ -27,13 +29,23 @@ class GeminiModel:
         thread = threading.Thread(target=self._thinking_animation, args=(stop_event,))
         thread.start()
 
-        response = self.client.models.generate_content(
-            model="models/gemma-4-31b-it",
-            # model="models/gemini-2.5-flash-lite",
-            contents=prompt
+        # response = self.client.models.generate_content(
+        #     # model="models/gemma-4-31b-it",
+        #     model="models/gemini-2.5-flash",
+        #     contents=prompt
+        # )
+        
+        response = requests.post(
+            self.url,
+            json={
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False
+            }
         )
+        data = response.json()
 
         stop_event.set()
         thread.join()
 
-        return response.text
+        return data["response"]
