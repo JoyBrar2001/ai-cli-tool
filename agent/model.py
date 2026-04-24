@@ -29,6 +29,7 @@ class GeminiModel:
 
         response = self.client.models.generate_content(
             model="models/gemma-4-31b-it",
+            # model="models/gemini-2.5-flash-lite",
             contents=prompt
         )
 

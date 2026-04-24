@@ -1,9 +1,12 @@
+import json
+
 from agent.model import GeminiModel
 from agent.parser import parse_json
-from tools.file_tools import create_file, write_file, read_file, list_files, edit_file
+from tools.file_tools import create_file, create_folder, write_file, read_file, list_files, edit_file
 
 TOOLS = {
     "create_file": create_file,
+    "create_folder": create_folder,
     "write_file": write_file,
     "read_file": read_file,
     "list_files": list_files,
@@ -12,6 +15,7 @@ TOOLS = {
 
 TOOL_SCHEMAS = {
     "create_file": ["path"],
+    "create_folder": ["path"],
     "write_file": ["path", "content"],
     "read_file": ["path"],
     "list_files": [],
@@ -24,11 +28,11 @@ You are an AI coding agent.
 You have access to these tools: 
 
 1. create_file - input: { "path": "file name" } 
-2. write_file - input: { "path": "file name", "content": "text" } 
-3. read_file - input: { "path": "file name" } 
-4. list_files - input: {} 
-5. edit_file
-   - input: { "path": "file name", "old": "text to replace", "new": "replacement text" }
+2. create_folder - input: { "path": "folder name" }
+3. write_file - input: { "path": "file name", "content": "text" } 
+4. read_file - input: { "path": "file name" } 
+5. list_files - input: {} 
+6. edit_file - input: { "path": "file name", "old": "text to replace", "new": "replacement text" }
 
 EDITING RULES:
 - Prefer edit_file instead of write_file when modifying existing files
@@ -37,7 +41,9 @@ EDITING RULES:
 - Do NOT overwrite entire file unless explicitly required
 
 IMPORTANT: 
-
+- You MUST return ONLY ONE action at a time
+- NEVER return multiple JSON objects
+- After each action, wait for the next instruction
 - Before creating or writing files, you SHOULD call list_files to check existing files 
 - Avoid creating duplicate files 
 - Use list_files to understand project structure 
@@ -67,7 +73,7 @@ class Agent:
 
     def run(self, user_input):
         conversation = user_input
-        last_action = None
+        last_signature = None
 
         for step in range(1, self.max_steps + 1):
             print(f"\n🧠 Step {step}/{self.max_steps}")
@@ -82,7 +88,14 @@ class Agent:
             parsed = parse_json(response)
 
             if parsed and "action" in parsed:
+                current_signature = json.dumps(parsed, sort_keys=True)
+                
+                if current_signature == last_signature:
+                    print("⚠️ Repeating exact same action. Stopping.")
+                    return
+                
                 action = parsed["action"]
+                print("Parsed - ", parsed)
                 print(f"🔧 Action: {action}")
 
                 if action == "finish":
@@ -92,11 +105,7 @@ class Agent:
                 if action == "edit_file":
                     print("✏️ Editing file...")
 
-                if action == last_action:
-                    print("⚠️ Repeating action. Stopping.")
-                    return
-
-                last_action = action
+                last_signature = current_signature
 
                 if action in TOOLS:
                     allowed = TOOL_SCHEMAS[action]

@@ -8,18 +8,19 @@ def get_full_path(path: str):
 
 # ---------------- LIST FILES ---------------- #
 def list_files():
-    file_list = []
+    items = []
 
     for root, dirs, files in os.walk(BASE_DIR):
-        for file in files:
-            full_path = os.path.join(root, file)
-            relative_path = os.path.relpath(full_path, BASE_DIR)
-            file_list.append(relative_path)
+        for d in dirs:
+            items.append(os.path.relpath(os.path.join(root, d), BASE_DIR) + "/")
+        
+        for f in files:
+            items.append(os.path.relpath(os.path.join(root, f), BASE_DIR))
 
-    if not file_list:
-        return "No files found."
+    if not items:
+        return "Empty workspace"
 
-    return "\n".join(file_list)
+    return "\n".join(items)
 
 # ---------------- CREATE FILE ---------------- #
 def create_file(path: str):
@@ -31,9 +32,19 @@ def create_file(path: str):
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
     with open(full_path, "w", encoding="utf-8") as f:
-        pass
+        f.write("")
 
     return f"File created at {full_path}"
+
+# ---------------- CREATE FOLDER ---------------- #
+def create_folder(path: str):
+    full_path = get_full_path(path)
+    
+    if os.path.exists(full_path):
+        return f"Folder already exists at {full_path}"
+    
+    os.makedirs(full_path, exist_ok=True)
+    return f"Folder created at {full_path}"
 
 # ---------------- WRITE FILE ---------------- #
 def write_file(path: str, content: str):
