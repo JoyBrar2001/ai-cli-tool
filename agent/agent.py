@@ -68,20 +68,31 @@ VALID OUTPUT FORMAT:
 
 { "action": "create_file", "path": "test.py" }
 
-----------------------------------------
-INVALID OUTPUT (NEVER DO THIS):
+EDITING RULES:
+- Prefer edit_file instead of write_file when modifying existing files
+- Use read_file first to understand content before editing
+- Only modify necessary parts of the file
+- Do NOT overwrite entire file unless explicitly required
 
-❌ Multiple JSON:
-{ "action": "create_file" }
-{ "action": "write_file" }
+IMPORTANT: 
+- You MUST return ONLY ONE action at a time
+- NEVER return multiple JSON objects
+- After each action, wait for the next instruction
+- Before creating or writing files, you SHOULD call list_files to check existing files 
+- Avoid creating duplicate files 
+- Use list_files to understand project structure 
 
-❌ JSON + explanation:
-{ "action": "create_file" }
-This will create a file.
+RULES: 
+- If a tool is needed → return ONLY JSON 
+- Do NOT include explanation 
+- Do NOT include markdown 
+- Always return valid JSON 
 
-❌ Markdown:
-```json
-{ "action": "create_file" }
+Examples: 
+Create file: { "action": "create_file", "path": "test.py" } 
+Write file: { "action": "write_file", "path": "test.py", "content": "print('hello')" } 
+Read file: { "action": "read_file", "path": "test.py" } 
+List files: { "action": "list_files }
 """
 
 class Agent:
