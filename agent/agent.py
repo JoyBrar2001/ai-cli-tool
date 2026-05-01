@@ -2,7 +2,7 @@ import json
 
 from agent.model import LocalModel
 from agent.parser import parse_json
-from tools.file_tools import create_file, create_folder, write_file, read_file, list_files, edit_file
+from tools.file_tools import create_file, create_folder, write_file, read_file, list_files, edit_file, run_command
 
 TOOLS = {
     "create_file": create_file,
@@ -10,7 +10,8 @@ TOOLS = {
     "write_file": write_file,
     "read_file": read_file,
     "list_files": list_files,
-    "edit_file": edit_file
+    "edit_file": edit_file,
+    "run_command": run_command
 }
 
 TOOL_SCHEMAS = {
@@ -20,7 +21,8 @@ TOOL_SCHEMAS = {
     "write_file": ["path", "content"],
     "read_file": ["path"],
     "list_files": [],
-    "edit_file": ["path", "old", "new"]
+    "edit_file": ["path", "old", "new"],
+    "run_command": ["command"]
 }
 
 SYSTEM_PROMPT = """
@@ -51,6 +53,31 @@ AVAILABLE TOOLS:
 
 7. edit_file
    input: { "path": "file name", "old": "text", "new": "text" }
+
+8. run_command
+   input: { "command": "shell command" }
+
+----------------------------------------
+
+COMMAND RULES:
+- Use run_command ONLY for safe development commands
+- Examples:
+  - npm create vite@latest myapp
+  - npm install
+  - npm run dev
+  - python main.py
+- NEVER run destructive commands
+- NEVER delete system files
+- Always assume working directory is workspace/
+
+----------------------------------------
+WORKFLOW RULES:
+
+- ALWAYS call list_files first
+- If file does not exist → create_file
+- THEN write_file
+- NEVER skip steps
+- NEVER write to a file that does not exist
 
 ----------------------------------------
 CRITICAL OUTPUT RULES (VERY IMPORTANT):
@@ -115,6 +142,8 @@ class Agent:
             parsed = parse_json(response)
 
             if parsed and "action" in parsed:
+                print("\n\n\n" + "PARSED OUTPUT" + json.dumps(parsed, sort_keys=True) + "\n\n\n")
+                
                 current_signature = json.dumps(parsed, sort_keys=True)
                 
                 if current_signature == last_signature:
@@ -137,15 +166,28 @@ class Agent:
                 
                 if action == "edit_file":
                     print("✏️ Editing file...")
+                    
+                if action == "run_command":
+                    command = parsed.get("command") or parsed.get("cmd")
+
+                    if not command and "input" in parsed:
+                        command = parsed["input"].get("command")
+
+                    if not command:
+                        return "❌ Missing command"
+
+                    result = run_command(command)
 
                 last_signature = current_signature
 
                 if action in TOOLS:
                     allowed = TOOL_SCHEMAS[action]
-                    args = {k: v for k, v in parsed.items() if k in allowed}
+                    args = {
+                        k: v for k, v in parsed.items() if k in allowed
+                    }
 
                     result = TOOLS[action](**args)
-                    print(f"⚙️ {result}")
+                    print("\n⚙️", result)
 
                     conversation += f"""
 User goal: {user_input}

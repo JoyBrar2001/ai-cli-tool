@@ -1,4 +1,7 @@
 import os
+import shlex
+import subprocess
+
 from tools.diff import generate_diff, print_diff
 
 BASE_DIR = "workspace"
@@ -75,6 +78,8 @@ def read_file(path: str):
     with open(full_path, "r", encoding="utf-8") as f:
         return f.read()
     
+    
+# ---------------- EDIT FILE ---------------- #
 def edit_file(path: str, old: str, new: str):
     full_path = get_full_path(path)
 
@@ -96,3 +101,38 @@ def edit_file(path: str, old: str, new: str):
         f.write(updated_content)
 
     return f"Edited file at {full_path}"
+
+# ---------------- RUN COMMAND ---------------- #
+
+ALLOWED_COMMANDS = [
+    "npm",
+    "npx",
+    "node",
+    "python",
+    "pip"
+]
+
+def run_command(command: str):
+    try:
+        process = subprocess.run(
+            command,
+            shell=True,
+            cwd=BASE_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
+            text=True
+        )
+
+        output = ""
+        
+        for line in process.stdout:
+            print(line, end="")
+            output += line
+        
+        process.wait()
+        
+        return output
+    
+    except Exception as e:
+        return f"❌ Exception: {str(e)}"
